@@ -3,7 +3,7 @@
 /**
  * OmniAntigravity Remote Chat — Node.js Launcher
  * Replaces launcher.py with pure Node.js implementation.
- * Supports local (Wi-Fi) and web (Cloudflare Quick Tunnel with ngrok fallback) modes.
+ * Supports local (Wi-Fi) and web (Cloudflare, Pinggy, or ngrok) modes.
  *
  * @module launcher
  */
@@ -12,15 +12,31 @@ import { spawn } from 'child_process';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import fs from 'fs';
+import http from 'http';
+import https from 'https';
 import { getLocalIP } from './src/utils/network.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-// Parse CLI args
 const args = process.argv.slice(2);
+
+/**
+ * @param {string} flag
+ * @param {string} fallback
+ * @returns {string}
+ */
+function readArg(flag, fallback) {
+    const index = args.indexOf(flag);
+    if (index === -1) return fallback;
+    return args[index + 1] || fallback;
+}
+
 /** @type {'local' | 'web'} */
-const mode = args.includes('--mode') ? /** @type {'local' | 'web'} */ (args[args.indexOf('--mode') + 1]) : 'local';
+const mode = /** @type {'local' | 'web'} */ (readArg('--mode', 'local'));
+const requestedTunnelProvider = String(
+    readArg('--provider', process.env.TUNNEL_PROVIDER || 'cloudflare')
+).toLowerCase();
 
 // Colors for terminal output
 const c = {
@@ -44,7 +60,11 @@ function banner() {
     console.log(`${c.magenta}${c.bold}  ║   OmniAntigravity Remote Chat            ║${c.reset}`);
     console.log(`${c.magenta}${c.bold}  ║   Mobile Remote Control for AI Sessions  ║${c.reset}`);
     console.log(`${c.magenta}${c.bold}  ╚══════════════════════════════════════════╝${c.reset}`);
-    console.log(`${c.dim}  Mode: ${mode === 'web' ? '🌐 Web (Cloudflare / ngrok)' : '📶 Local (Wi-Fi)'}${c.reset}`);
+    if (mode === 'web') {
+        console.log(`${c.dim}  Mode: 🌐 Web (${requestedTunnelProvider} preferred)${c.reset}`);
+    } else {
+        console.log(`${c.dim}  Mode: 📶 Local (Wi-Fi)${c.reset}`);
+    }
     console.log('');
 }
 
@@ -92,31 +112,108 @@ async function startNgrok(port) {
 }
 
 /**
- * Poll the local tunnel status endpoint until a public URL is available.
+ * Send a JSON request to the local server, allowing self-signed HTTPS.
  *
  * @param {number} port
+ * @param {'http' | 'https'} protocol
+ * @param {string} path
+ * @param {unknown} body
+ * @returns {Promise<{statusCode: number, payload: any}>}
+ */
+function requestLocalJson(port, protocol, path, body) {
+    const transport = protocol === 'https' ? https : http;
+    const payload = JSON.stringify(body);
+
+    return new Promise((resolve, reject) => {
+        const req = transport.request({
+            host: '127.0.0.1',
+            port,
+            path,
+            method: 'POST',
+            rejectUnauthorized: false,
+            headers: {
+                'Content-Type': 'application/json',
+                'Content-Length': Buffer.byteLength(payload),
+                'ngrok-skip-browser-warning': 'true'
+            }
+        }, (res) => {
+            let raw = '';
+            res.setEncoding('utf8');
+            res.on('data', (chunk) => {
+                raw += chunk;
+            });
+            res.on('end', () => {
+                try {
+                    resolve({
+                        statusCode: res.statusCode || 0,
+                        payload: raw ? JSON.parse(raw) : {}
+                    });
+                } catch (error) {
+                    reject(error);
+                }
+            });
+        });
+
+        req.on('error', reject);
+        req.write(payload);
+        req.end();
+    });
+}
+
+/**
+ * Ask the local server to start a managed tunnel provider.
+ *
+ * @param {number} port
+ * @param {'cloudflare' | 'pinggy'} provider
  * @returns {Promise<string>}
  */
-async function waitForCloudflareTunnel(port) {
-    const timeoutAt = Date.now() + 25000;
+async function startManagedTunnel(port, provider) {
+    const attempts = ['https', 'http'];
 
-    while (Date.now() < timeoutAt) {
+    for (const protocol of attempts) {
         try {
-            const response = await fetch(`http://127.0.0.1:${port}/api/admin/tunnel`);
-            if (response.ok) {
-                const payload = await response.json();
-                if (payload.url) {
-                    return payload.url;
-                }
-            }
-        } catch (_) {
-            // Server may still be booting.
-        }
+            const { statusCode, payload } = await requestLocalJson(
+                port,
+                /** @type {'http' | 'https'} */ (protocol),
+                '/api/admin/tunnel/start',
+                { provider }
+            );
 
-        await new Promise(resolve => setTimeout(resolve, 1000));
+            if (statusCode >= 200 && statusCode < 300 && payload.url) {
+                return payload.url;
+            }
+
+            throw new Error(payload.error || `${provider} tunnel unavailable`);
+        } catch (error) {
+            if (protocol === attempts[attempts.length - 1]) {
+                throw error;
+            }
+        }
     }
 
-    throw new Error('Cloudflare tunnel did not become ready in time');
+    throw new Error(`${provider} tunnel unavailable`);
+}
+
+/**
+ * @returns {Array<'cloudflare' | 'pinggy' | 'ngrok'>}
+ */
+function getTunnelCandidates() {
+    /** @type {Array<'cloudflare' | 'pinggy' | 'ngrok'>} */
+    const ordered = [];
+    /** @type {Array<'cloudflare' | 'pinggy' | 'ngrok'>} */
+    const defaults = ['cloudflare', 'pinggy', 'ngrok'];
+
+    if (requestedTunnelProvider === 'cloudflare' || requestedTunnelProvider === 'pinggy' || requestedTunnelProvider === 'ngrok') {
+        ordered.push(/** @type {'cloudflare' | 'pinggy' | 'ngrok'} */ (requestedTunnelProvider));
+    }
+
+    defaults.forEach((provider) => {
+        if (!ordered.includes(provider)) {
+            ordered.push(provider);
+        }
+    });
+
+    return ordered;
 }
 
 /**
@@ -139,14 +236,10 @@ async function main() {
 
     // Start the Node.js server
     console.log(`${c.blue}  ▶ Starting server...${c.reset}`);
-    const serverEnv = { ...process.env };
-    if (mode === 'web') {
-        serverEnv.AUTO_TUNNEL_PROVIDER = serverEnv.AUTO_TUNNEL_PROVIDER || 'cloudflare';
-    }
     const server = spawn('node', [join(__dirname, 'src', 'server.js')], {
         cwd: __dirname,
         stdio: 'inherit',
-        env: serverEnv
+        env: { ...process.env }
     });
 
     // Wait for server to be ready
@@ -154,14 +247,27 @@ async function main() {
 
     if (mode === 'web') {
         let publicUrl = '';
-        try {
-            console.log(`${c.blue}  ▶ Waiting for Cloudflare Quick Tunnel...${c.reset}`);
-            publicUrl = await waitForCloudflareTunnel(parseInt(String(port)));
-        } catch (error) {
-            console.log(`${c.yellow}  ⚠ Cloudflare tunnel unavailable: ${error.message}${c.reset}`);
-            console.log(`${c.blue}  ▶ Falling back to ngrok...${c.reset}`);
-            publicUrl = await startNgrok(parseInt(String(port)));
+        const tunnelCandidates = getTunnelCandidates();
+
+        for (const provider of tunnelCandidates) {
+            try {
+                if (provider === 'ngrok') {
+                    console.log(`${c.blue}  ▶ Starting ngrok tunnel...${c.reset}`);
+                    publicUrl = await startNgrok(parseInt(String(port)));
+                } else {
+                    console.log(`${c.blue}  ▶ Starting ${provider} tunnel...${c.reset}`);
+                    publicUrl = await startManagedTunnel(parseInt(String(port)), provider);
+                }
+                break;
+            } catch (error) {
+                console.log(`${c.yellow}  ⚠ ${provider} unavailable: ${error.message}${c.reset}`);
+            }
         }
+
+        if (!publicUrl) {
+            throw new Error('No tunnel provider became available');
+        }
+
         console.log('');
         console.log(`${c.green}${c.bold}  ✓ Web Access Ready!${c.reset}`);
         console.log(`${c.cyan}  → ${publicUrl}${c.reset}`);

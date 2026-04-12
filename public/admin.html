@@ -3,15 +3,16 @@
   <head>
     <meta charset="UTF-8" />
     <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob:; connect-src 'self' ws: wss:; worker-src 'self'; frame-src 'none'; object-src 'none'; base-uri 'self'; form-action 'self';"
+    />
+    <meta
       name="viewport"
       content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
     />
     <title>OmniAntigravity Admin</title>
     <link rel="stylesheet" href="/css/style.css" />
-    <script>
-      document.documentElement.dataset.theme =
-        localStorage.getItem("omni-theme") || "dark";
-    </script>
+    <script src="/js/theme-bootstrap.js"></script>
   </head>
   <body>
     <div class="admin-shell">
@@ -44,11 +45,15 @@
             <div class="panel-header">
               <div>
                 <div class="panel-title">Tunnel</div>
-                <div class="panel-subtitle">Cloudflare Quick Tunnel control</div>
+                <div class="panel-subtitle">Cloudflare and Pinggy tunnel control</div>
               </div>
             </div>
             <div class="admin-actions">
-              <button class="panel-btn primary" id="tunnelStartBtn">Start Cloudflare</button>
+              <select class="panel-input" id="tunnelProviderSelect">
+                <option value="cloudflare">Cloudflare</option>
+                <option value="pinggy">Pinggy</option>
+              </select>
+              <button class="panel-btn primary" id="tunnelStartBtn">Start Tunnel</button>
               <button class="panel-btn danger" id="tunnelStopBtn">Stop Tunnel</button>
             </div>
             <div class="code-preview" id="adminTunnelStatus">No active tunnel.</div>

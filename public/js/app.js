@@ -1484,18 +1484,28 @@ chatContainer.addEventListener('scroll', () => {
     state.userIsScrolling = false;
   }, 5000);
 });
+
 chatContainer.addEventListener('click', async (event) => {
-  const target = event.target.closest('div, span, p, summary, button, details');
+  if (event.target.closest('.mobile-copy-btn')) return;
+
+  const annotatedTarget = event.target.closest('[data-omni-idx]');
+  const target = annotatedTarget || event.target.closest('div, span, p, summary, button, details');
   if (!target) return;
-  const text = target.innerText || '';
-  if (!/Thought|Thinking/i.test(text) || text.length > 500) return;
+
+  const text = (target.getAttribute?.('data-omni-text') || target.innerText || '').trim();
+  if (!annotatedTarget && (!/Thought|Thinking/i.test(text) || text.length > 500)) return;
+
+  const omniIndexValue = target.getAttribute?.('data-omni-idx');
+  const omniIndex = omniIndexValue !== null ? Number.parseInt(omniIndexValue, 10) : null;
+
   try {
     await fetchWithAuth('/remote-click', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         selector: target.tagName.toLowerCase(),
-        index: 0,
+        index: Number.isFinite(omniIndex) ? omniIndex : 0,
+        omniIndex: Number.isFinite(omniIndex) ? omniIndex : undefined,
         textContent: text.split('\n')[0].trim(),
       }),
     });

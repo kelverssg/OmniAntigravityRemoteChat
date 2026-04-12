@@ -7,7 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [1.2.2] - 2026-04-05
+## [1.3.0] - 2026-04-12
+
+### Security
+- 🔒 **Content Security Policy (CSP)** — Strict `script-src 'self'` meta-tag applied to all 4 HTML pages (`index.html`, `login.html`, `admin.html`, `minimal.html`). CSP also enforced via Express HTTP header for defense-in-depth. Prevents XSS via injected snapshot HTML.
+- 🔒 **Zero-inline enforcement** — Extracted all remaining inline scripts to external files: `theme-bootstrap.js` (theme init from 3 pages), `login.js` (login logic from `login.html`). Zero `<script>` tags with inline content remain.
+
+### Added
+- 🎯 **Leaf-node isolation** — `clickElement()` now filters for inner-most matching DOM nodes, preventing clicks from landing on parent containers instead of the actual interactive element (the "Nested DOM Trap").
+- 🎯 **Occurrence index tracking** — Snapshot enrichment adds `data-omni-idx/text/total` attributes to interactive elements. Mobile remote-click sends occurrence index for deterministic targeting of duplicate elements like multiple "Run" or "Thought for Xs" buttons.
+- 🔌 **Pinggy tunnel support** — New `scripts/pinggy-tunnel.js` module with `PinggyTunnelManager` class. SSH-based tunneling with zero binary dependencies. Supports ephemeral and token-based persistent subdomains. Configurable via `TUNNEL_PROVIDER=pinggy` and `PINGGY_TOKEN`.
+- 🔌 **Multi-tunnel management** — Refactored tunnel system from single `tunnelManager` to `tunnelManagers` map supporting Cloudflare and Pinggy simultaneously with automatic stop-other-on-start logic.
+- 📖 **Design Philosophy** — New `DESIGN_PHILOSOPHY.md` (195 lines) documenting 10 core principles: Robustness Over Precision, Zero-Impact Mirroring, Visual Parity, Security-First Architecture, Mobile-First Workspace, Modular Architecture, AI-Augmented Operations, Observability as Feature, Graceful Degradation, and Notification-Driven Awareness.
+- 🚀 **npm script** — Added `start:web:pinggy` convenience script for one-command Pinggy tunnel launch.
+
+### Changed
+- 🔧 **Launcher refactor** — `launcher.js` now supports `--provider` flag and cascading tunnel fallback order (preferred → cloudflare → pinggy → ngrok). Uses native `http`/`https` modules instead of `fetch` for self-signed cert compatibility.
+- 🔧 **Admin UI** — Tunnel panel now shows provider selector dropdown (Cloudflare/Pinggy) instead of hardcoded Cloudflare-only button.
+- 🔧 **`/js/login.js` public path** — Added to auth middleware whitelist so unauthenticated users can load the login page correctly under CSP.
+
 
 ### Fixed
 - 🐛 **WORKSPACE_ROOT injection** — Fixed ESM import hoisting bug that ignored `.env` config variables (Issue #10).

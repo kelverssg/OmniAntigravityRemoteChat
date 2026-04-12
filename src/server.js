@@ -60,6 +60,7 @@ import {
 } from './utils/workspace.js';
 import { aiSupervisor, suggestQueue, extractPendingCommand } from './supervisor.js';
 import { CloudflareTunnelManager } from '../scripts/cloudflare-tunnel.js';
+import { PinggyTunnelManager } from '../scripts/pinggy-tunnel.js';
 
 // ─── Mutable State ──────────────────────────────────────────────────
 
@@ -99,8 +100,94 @@ const serverStartedAt = new Date().toISOString();
 const MAX_SERVER_LOGS = 250;
 /** @type {Array<{level: string, message: string, timestamp: string}>} */
 const serverLogs = [];
-const tunnelManager = new CloudflareTunnelManager();
+const tunnelManagers = {
+    cloudflare: new CloudflareTunnelManager(),
+    pinggy: new PinggyTunnelManager()
+};
 let tunnelProvider = '';
+const CONTENT_SECURITY_POLICY = [
+    "default-src 'self'",
+    "script-src 'self'",
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com",
+    "font-src 'self' https://fonts.gstatic.com data:",
+    "img-src 'self' data: blob:",
+    "connect-src 'self' ws: wss:",
+    "worker-src 'self'",
+    "frame-src 'none'",
+    "object-src 'none'",
+    "base-uri 'self'",
+    "form-action 'self'"
+].join('; ');
+
+/**
+ * @param {string} [provider]
+ */
+function getTunnelManager(provider = tunnelProvider) {
+    if (!provider) return null;
+    return tunnelManagers[provider] || null;
+}
+
+/**
+ * @param {string} [provider]
+ */
+function getTunnelStatus(provider = tunnelProvider) {
+    const manager = getTunnelManager(provider);
+    if (manager) {
+        return manager.getStatus();
+    }
+    return {
+        active: false,
+        url: '',
+        startedAt: '',
+        error: '',
+        logs: []
+    };
+}
+
+function broadcastTunnelStatus() {
+    broadcast({
+        type: 'tunnel_status',
+        status: {
+            provider: tunnelProvider,
+            ...getTunnelStatus()
+        },
+        timestamp: new Date().toISOString()
+    });
+}
+
+/**
+ * @param {string} provider
+ * @returns {Promise<void>}
+ */
+async function stopOtherTunnels(provider) {
+    const tasks = Object.entries(tunnelManagers)
+        .filter(([name]) => name !== provider)
+        .map(([, manager]) => manager.stop());
+    await Promise.all(tasks);
+}
+
+/**
+ * @param {string} provider
+ * @param {number} port
+ * @param {{tls?: boolean, sniServerName?: string}} [options]
+ * @returns {Promise<string>}
+ */
+async function startTunnel(provider, port, options = {}) {
+    const manager = getTunnelManager(provider);
+    if (!manager) {
+        throw new Error(`Unsupported tunnel provider: ${provider}`);
+    }
+
+    await stopOtherTunnels(provider);
+    tunnelProvider = provider;
+    return manager.start(port, options);
+}
+
+async function stopActiveTunnel() {
+    const manager = getTunnelManager();
+    if (!manager) return;
+    await manager.stop();
+}
 
 const screenStreamState = {
     active: false,
@@ -433,16 +520,17 @@ async function startScreencast() {
 /**
  * @returns {Promise<void>}
  */
-async function maybeStartAutoTunnel() {
-    if (AUTO_TUNNEL_PROVIDER !== 'cloudflare') return;
-    if (tunnelManager.getStatus().active) return;
+async function maybeStartAutoTunnel(options = {}) {
+    const provider = AUTO_TUNNEL_PROVIDER;
+    const manager = getTunnelManager(provider);
+    if (!manager) return;
+    if (manager.getStatus().active) return;
 
-    tunnelProvider = 'cloudflare';
     try {
-        const url = await tunnelManager.start(Number(SERVER_PORT));
-        console.log(`☁️ Cloudflare tunnel ready: ${url}`);
+        const url = await startTunnel(provider, Number(SERVER_PORT), options);
+        console.log(`☁️ ${provider} tunnel ready: ${url}`);
     } catch (e) { const error = /** @type {Error} */ (e);
-        console.warn(`⚠️ Cloudflare tunnel failed: ${error.message}`);
+        console.warn(`⚠️ ${provider} tunnel failed: ${error.message}`);
     }
 }
 
@@ -519,6 +607,35 @@ async function checkErrorDialogs(cdp) {
 
 async function captureSnapshot(cdp) {
     const CAPTURE_SCRIPT = `(() => {
+        const INTERACTIVE_TEXT_PATTERNS = [
+            /^thought/i,
+            /^thinking/i,
+            /^run$/i,
+            /^reject$/i,
+            /^accept$/i,
+            /^allow$/i,
+            /^deny$/i,
+            /^review changes$/i,
+            /^files with changes$/i,
+            /^continue$/i,
+            /^cancel$/i,
+            /^retry$/i,
+            /^show more$/i,
+            /^show less$/i,
+            /^expand$/i,
+            /^collapse$/i,
+            /^copy$/i
+        ];
+        const normalizeText = (value) => (value || '').split('\\n')[0].replace(/\\s+/g, ' ').trim();
+        const isInteractiveCandidate = (el) => {
+            const text = normalizeText(el.textContent || el.innerText || '');
+            if (!text || text.length > 120) return false;
+            if (el.children.length > 0) return false;
+            if (['BUTTON', 'A', 'SUMMARY'].includes(el.tagName)) return true;
+            if (el.getAttribute('role') === 'button') return true;
+            return INTERACTIVE_TEXT_PATTERNS.some((pattern) => pattern.test(text));
+        };
+
         // Smart container detection: try multiple IDs with fallback chain
         const CONTAINER_IDS = ['cascade', 'conversation', 'chat'];
         let cascade = null;
@@ -616,6 +733,26 @@ async function captureSnapshot(cdp) {
                         } catch(canvasErr) {}
                     }
                 } catch(imgErr) {}
+            });
+
+            const textGroups = new Map();
+            Array.from(clone.querySelectorAll('button, [role="button"], a, summary, span, div, p')).forEach(el => {
+                try {
+                    if (!isInteractiveCandidate(el)) return;
+                    const text = normalizeText(el.textContent || el.innerText || '');
+                    if (!textGroups.has(text)) {
+                        textGroups.set(text, []);
+                    }
+                    textGroups.get(text).push(el);
+                } catch (_) {}
+            });
+
+            textGroups.forEach((elements, text) => {
+                elements.forEach((el, idx) => {
+                    el.setAttribute('data-omni-text', text);
+                    el.setAttribute('data-omni-idx', String(idx));
+                    el.setAttribute('data-omni-total', String(elements.length));
+                });
             });
         } catch (globalErr) { }
         
@@ -888,17 +1025,46 @@ async function stopGeneration(cdp) {
 /**
  * Click a DOM element via deterministic targeting with occurrence index.
  * @param {import('./state.js').CDPConnection} cdp
- * @param {{selector: string, index: number, textContent?: string}} params
- * @returns {Promise<{success?: boolean, matchCount?: number, index?: number, error?: string}>}
+ * @param {{selector?: string, index?: number, textContent?: string, omniIndex?: number}} params
+ * @returns {Promise<{success?: boolean, matchCount?: number, index?: number, omniIndex?: number, error?: string}>}
  */
-async function clickElement(cdp, { selector, index, textContent }) {
-    // Deterministic targeting with occurrence index tracking and leaf-node filtering
+async function clickElement(cdp, { selector, index = 0, textContent, omniIndex }) {
+    const safeSelector = JSON.stringify(selector || '*');
     const safeTextContent = textContent ? JSON.stringify(textContent) : 'null';
+    const safeIndex = Number.isFinite(index) ? index : 0;
+    const safeOmniIndex = Number.isFinite(omniIndex) ? omniIndex : -1;
     const EXP = `(async () => {
         try {
+            const selector = ${safeSelector};
             const searchText = ${safeTextContent};
+            const explicitIndex = ${safeIndex};
+            const omniIndex = ${safeOmniIndex};
+            const normalizeText = (value) => (value || '').split('\\n')[0].replace(/\\s+/g, ' ').trim();
+            const isVisible = (el) => !!(el && (el.offsetParent !== null || el.getClientRects().length > 0));
+            const matchesSearchText = (el) => {
+                if (!searchText) return true;
+                const exact = normalizeText(el.textContent || el.innerText || '');
+                if (exact === searchText) return true;
+                const fullText = (el.textContent || el.innerText || '').trim();
+                return fullText.includes(searchText);
+            };
+            const isClickable = (el) => {
+                if (!el) return false;
+                if (['BUTTON', 'A', 'SUMMARY'].includes(el.tagName)) return true;
+                if (el.getAttribute('role') === 'button') return true;
+                if (typeof el.onclick === 'function') return true;
+                const style = window.getComputedStyle(el);
+                return style.cursor === 'pointer';
+            };
+            const findClickableTarget = (el) => {
+                let current = el;
+                for (let i = 0; current && i < 6; i += 1) {
+                    if (isClickable(current)) return current;
+                    current = current.parentElement;
+                }
+                return el;
+            };
             
-            // 1. Scope search to active chat containers for precision
             const CONTAINER_IDS = ['cascade', 'conversation', 'chat'];
             let scope = null;
             for (const id of CONTAINER_IDS) {
@@ -907,39 +1073,64 @@ async function clickElement(cdp, { selector, index, textContent }) {
             }
             if (!scope) scope = document.body;
             
-            // 2. Find all matching elements within the scoped container
-            let elements = Array.from(scope.querySelectorAll('${selector}'));
+            let elements = [];
+            try {
+                elements = Array.from(scope.querySelectorAll(selector));
+            } catch (_) {
+                elements = Array.from(scope.querySelectorAll('*'));
+            }
+            elements = elements.filter(isVisible);
             
-            // 3. Text-based filtering with first-line matching for precision
             if (searchText) {
-                elements = elements.filter(el => {
-                    const elText = el.textContent || '';
-                    // First try exact first-line match (best for "Thought for 3s" etc.)
-                    const firstLine = elText.split('\\n')[0].trim();
-                    if (firstLine === searchText) return true;
-                    // Fallback to includes
-                    return elText.includes(searchText);
-                });
+                elements = elements.filter(matchesSearchText);
+            }
+
+            if (elements.length === 0 && searchText) {
+                elements = Array.from(
+                    scope.querySelectorAll('button, [role="button"], a, summary, span, div, p')
+                )
+                    .filter(isVisible)
+                    .filter(matchesSearchText);
             }
             
-            // 4. Leaf-most filtering: prefer inner-most clickable element
-            //    Prevents "Nested DOM Traps" where clicks land on parent containers
             if (elements.length > 1) {
                 elements = elements.filter(el => {
-                    // Check if any other match is a child of this element
                     return !elements.some(other => other !== el && el.contains(other));
                 });
             }
 
-            // 5. Use occurrence index for deterministic targeting 
-            const target = elements[${index}];
+            const targetIndex = omniIndex >= 0 ? omniIndex : explicitIndex;
+            const target = elements[targetIndex];
 
             if (target) {
-                target.click();
-                return { success: true, matchCount: elements.length, index: ${index} };
+                const clickable = findClickableTarget(target);
+                clickable.click();
+
+                try {
+                    const rect = clickable.getBoundingClientRect();
+                    const clientX = rect.left + rect.width / 2;
+                    const clientY = rect.top + rect.height / 2;
+                    ['mousedown', 'mouseup', 'click'].forEach(type => {
+                        clickable.dispatchEvent(new MouseEvent(type, {
+                            bubbles: true,
+                            cancelable: true,
+                            view: window,
+                            clientX,
+                            clientY,
+                            button: 0
+                        }));
+                    });
+                } catch (_) {}
+
+                return {
+                    success: true,
+                    matchCount: elements.length,
+                    index: explicitIndex,
+                    omniIndex: targetIndex
+                };
             }
             
-            return { error: 'Element not found at index ${index}', candidates: elements.length };
+            return { error: 'Element not found at requested index', candidates: elements.length, omniIndex: targetIndex };
         } catch(e) {
             return { error: e.toString() };
         }
@@ -2152,11 +2343,16 @@ async function createServer() {
     terminalManager.on('exit', (terminalState) => {
         broadcast({ type: 'terminal_state', state: terminalState });
     });
-    tunnelManager.on('url', () => {
-        broadcast({ type: 'tunnel_status', status: tunnelManager.getStatus(), timestamp: new Date().toISOString() });
-    });
-    tunnelManager.on('exit', () => {
-        broadcast({ type: 'tunnel_status', status: tunnelManager.getStatus(), timestamp: new Date().toISOString() });
+    Object.entries(tunnelManagers).forEach(([provider, manager]) => {
+        manager.on('url', () => {
+            tunnelProvider = provider;
+            broadcastTunnelStatus();
+        });
+        manager.on('exit', () => {
+            if (tunnelProvider === provider) {
+                broadcastTunnelStatus();
+            }
+        });
     });
 
     // Initialize session security & token
@@ -2175,6 +2371,10 @@ async function createServer() {
     app.use(compression());
     app.use(express.json({ limit: JSON_BODY_LIMIT }));
     app.use(cookieParser(COOKIE_SECRET));
+    app.use((req, res, next) => {
+        res.setHeader('Content-Security-Policy', CONTENT_SECURITY_POLICY);
+        next();
+    });
 
     // Ngrok Bypass Middleware
     app.use((req, res, next) => {
@@ -2185,7 +2385,7 @@ async function createServer() {
 
     // Auth Middleware
     app.use((req, res, next) => {
-        const publicPaths = ['/login', '/login.html', '/favicon.ico', '/manifest.json', '/sw.js'];
+        const publicPaths = ['/login', '/login.html', '/favicon.ico', '/manifest.json', '/sw.js', '/js/login.js'];
         if (
             publicPaths.includes(req.path) ||
             req.path.startsWith('/css/') ||
@@ -2273,7 +2473,10 @@ async function createServer() {
             timestamp: new Date().toISOString(),
             https: hasSSL,
             clients: getOpenClientCount(),
-            tunnel: tunnelManager.getStatus(),
+            tunnel: {
+                provider: tunnelProvider,
+                ...getTunnelStatus()
+            },
             version: VERSION
         });
     });
@@ -2669,7 +2872,7 @@ async function createServer() {
                 terminal: terminalManager.getState(),
                 tunnel: {
                     provider: tunnelProvider,
-                    ...tunnelManager.getStatus()
+                    ...getTunnelStatus()
                 },
                 supervisor: aiSupervisor.getStatus(),
                 suggestions: getSuggestionState(),
@@ -2697,20 +2900,19 @@ async function createServer() {
     app.get('/api/admin/tunnel', (req, res) => {
         res.json({
             provider: tunnelProvider,
-            ...tunnelManager.getStatus()
+            ...getTunnelStatus()
         });
     });
 
     app.post('/api/admin/tunnel/start', async (req, res) => {
         const provider = String(req.body.provider || 'cloudflare').toLowerCase();
-        if (provider !== 'cloudflare') {
-            return res.status(400).json({ error: 'Only cloudflare quick tunnels are supported' });
+        if (!getTunnelManager(provider)) {
+            return res.status(400).json({ error: `Unsupported tunnel provider: ${provider}` });
         }
 
-        tunnelProvider = provider;
         try {
-            const url = await tunnelManager.start(Number(SERVER_PORT));
-            broadcast({ type: 'tunnel_status', status: tunnelManager.getStatus(), timestamp: new Date().toISOString() });
+            const url = await startTunnel(provider, Number(SERVER_PORT), { tls: hasSSL, sniServerName: '127.0.0.1' });
+            broadcastTunnelStatus();
             res.json({ success: true, url, provider });
         } catch (e) { const error = /** @type {Error} */ (e);
             res.status(500).json({ error: error.message });
@@ -2718,9 +2920,9 @@ async function createServer() {
     });
 
     app.post('/api/admin/tunnel/stop', async (req, res) => {
-        await tunnelManager.stop();
-        broadcast({ type: 'tunnel_status', status: tunnelManager.getStatus(), timestamp: new Date().toISOString() });
-        res.json({ success: true, provider: tunnelProvider, ...tunnelManager.getStatus() });
+        await stopActiveTunnel();
+        broadcastTunnelStatus();
+        res.json({ success: true, provider: tunnelProvider, ...getTunnelStatus() });
     });
 
     // UI Inspection endpoint - Returns all buttons as JSON for debugging
@@ -2964,7 +3166,10 @@ async function createServer() {
         }));
         ws.send(JSON.stringify({
             type: 'tunnel_status',
-            status: tunnelManager.getStatus()
+            status: {
+                provider: tunnelProvider,
+                ...getTunnelStatus()
+            }
         }));
         ws.send(JSON.stringify({
             type: 'suggestion_state',
@@ -3008,9 +3213,9 @@ async function main() {
 
         // Remote Click
         app.post('/remote-click', async (req, res) => {
-            const { selector, index, textContent } = req.body;
+            const { selector, index, textContent, omniIndex } = req.body;
             if (!cdpConnection) return res.status(503).json({ error: 'CDP disconnected' });
-            const result = await clickElement(cdpConnection, { selector, index, textContent });
+            const result = await clickElement(cdpConnection, { selector, index, textContent, omniIndex });
             res.json(result);
         });
 
@@ -3163,7 +3368,7 @@ async function main() {
             console.log(`  ${DIM}⏹  Press Ctrl+C to stop${R}`);
             console.log('');
 
-            maybeStartAutoTunnel();
+            maybeStartAutoTunnel({ tls: hasSSL, sniServerName: '127.0.0.1' });
 
             // Initialize Telegram bot with interactive commands
             initTelegramBot().then(active => {
@@ -3222,7 +3427,7 @@ async function main() {
             console.log(`\n🛑 Received ${signal}. Shutting down gracefully...`);
             await stopScreencast();
             screenshotTimeline.stop();
-            await tunnelManager.stop();
+            await Promise.all(Object.values(tunnelManagers).map((manager) => manager.stop()));
             await stopTelegramBot();
             wss.close(() => {
                 console.log('   WebSocket server closed');

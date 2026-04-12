@@ -5,6 +5,7 @@ const quickCommandsEditor = document.getElementById('quickCommandsEditor');
 const refreshBtn = document.getElementById('adminRefreshBtn');
 const tunnelStartBtn = document.getElementById('tunnelStartBtn');
 const tunnelStopBtn = document.getElementById('tunnelStopBtn');
+const tunnelProviderSelect = document.getElementById('tunnelProviderSelect');
 const addCommandBtn = document.getElementById('adminAddCommandBtn');
 const saveCommandsBtn = document.getElementById('adminSaveCommandsBtn');
 
@@ -89,8 +90,12 @@ async function loadMetrics() {
     <div class="meta-card"><strong>Supervisor</strong><div>${escapeHtml(supervisorDetails)}</div></div>
   `;
 
+  if (metrics.tunnel?.provider) {
+    tunnelProviderSelect.value = metrics.tunnel.provider;
+  }
+
   tunnelStatus.textContent = metrics.tunnel?.url
-    ? `${metrics.tunnel.url}\n\nStarted at: ${metrics.tunnel.startedAt || 'n/a'}`
+    ? `Provider: ${metrics.tunnel.provider || 'unknown'}\nURL: ${metrics.tunnel.url}\n\nStarted at: ${metrics.tunnel.startedAt || 'n/a'}`
     : metrics.tunnel?.error || 'No active tunnel.';
 
   logsNode.textContent = (logsPayload.logs || [])
@@ -99,10 +104,11 @@ async function loadMetrics() {
 }
 
 async function startTunnel() {
+  const provider = tunnelProviderSelect.value || 'cloudflare';
   await fetchWithAuth('/api/admin/tunnel/start', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ provider: 'cloudflare' }),
+    body: JSON.stringify({ provider }),
   });
   await loadMetrics();
 }

@@ -47,6 +47,25 @@ async function sendMessage() {
   setTimeout(loadSnapshot, 500);
 }
 
+async function remoteClick(target) {
+  const text = (target.getAttribute?.('data-omni-text') || target.innerText || '').trim();
+  if (!text) return;
+
+  const omniIndexValue = target.getAttribute?.('data-omni-idx');
+  const omniIndex = omniIndexValue !== null ? Number.parseInt(omniIndexValue, 10) : null;
+
+  await fetchWithAuth('/remote-click', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      selector: target.tagName.toLowerCase(),
+      index: Number.isFinite(omniIndex) ? omniIndex : 0,
+      omniIndex: Number.isFinite(omniIndex) ? omniIndex : undefined,
+      textContent: text.split('\n')[0].trim(),
+    }),
+  });
+}
+
 function connect() {
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
   ws = new WebSocket(`${protocol}//${window.location.host}`);
@@ -79,6 +98,17 @@ input.addEventListener('keydown', (event) => {
 input.addEventListener('input', () => {
   input.style.height = 'auto';
   input.style.height = `${input.scrollHeight}px`;
+});
+
+chat.addEventListener('click', async (event) => {
+  const target = event.target.closest('[data-omni-idx]');
+  if (!target) return;
+
+  try {
+    await remoteClick(target);
+    setTimeout(loadSnapshot, 450);
+    setTimeout(loadSnapshot, 1000);
+  } catch (_) {}
 });
 
 connect();

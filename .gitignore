@@ -1,6 +1,8 @@
 # Dependencies
 node_modules/
 .venv/
+_references
+_tasks
 
 # Logs
 *.log
