@@ -1,4 +1,4 @@
-# CONTRIBUTING - OmniAntigravity Remote Chat
+# CONTRIBUTING — OmniAntigravity Remote Chat
 
 First off, thank you for considering contributing to OmniAntigravity Remote Chat! It's people like you that make the AI development ecosystem so exciting.
 
@@ -23,21 +23,22 @@ First off, thank you for considering contributing to OmniAntigravity Remote Chat
     - If you are changing the UI, please test on a real mobile device screen.
     - If you are changing the server, ensure CDP discovery logic is still backward compatible.
     - If you are modifying SSL/HTTPS, test both with and without certificates.
+    - If you are adding a new module, follow the existing ESM + JSDoc typing conventions.
 4.  **Validate** your changes (see the checklist below).
 5.  **Submit a PR** with a clear description of what changed and why.
 
 ## Local Setup
 
-1.  Clone your fork: `git clone https://github.com/krishnakanthb13/antigravity_phone_chat.git`
+1.  Clone your fork: `git clone https://github.com/YOUR_USERNAME/OmniAntigravityRemoteChat.git`
 2.  Install dependencies: `npm install`
-3.  **(Optional)** Generate SSL certificates: `node generate_ssl.js`
-4.  Start Antigravity with: `antigravity . --remote-debugging-port=9000`
-5.  Run the monitor: `node server.js`
+3.  **(Optional)** Generate SSL certificates: `npm run setup:ssl`
+4.  Start Antigravity with: `antigravity . --remote-debugging-port=7800`
+5.  Run the server: `npm start`
 6.  Access from phone: Use the URL shown in terminal (http or https)
 
 ## Pre-submission Checklist
 
-- [ ] Code follows existing style (clean, documented JS).
+- [ ] Code follows existing style (ESM imports, JSDoc typing, clean JS).
 - [ ] No hardcoded personal IPs or credentials.
 - [ ] SSL certificates are NOT committed (check `.gitignore`).
 - [ ] Snapshot capture still works with the latest Antigravity version.
@@ -45,32 +46,75 @@ First off, thank you for considering contributing to OmniAntigravity Remote Chat
 - [ ] Both HTTP and HTTPS modes work correctly.
 - [ ] Shell scripts have LF line endings (not CRLF).
 - [ ] All documentation updated if new features were added.
+- [ ] Content Security Policy is not violated (no inline scripts).
+- [ ] Unit tests pass: `npm run test:unit`.
+- [ ] Smoke tests pass: `npm test`.
 
 ## File Structure Notes
 
-| Directory/File    | Purpose                                                |
-| :---------------- | :----------------------------------------------------- |
-| `server.js`       | Main server - add new API endpoints here               |
-| `public/`         | Mobile UI files (index.html, css/style.css, js/app.js) |
-| `generate_ssl.js` | SSL cert generator - uses pure Node.js crypto          |
-| `certs/`          | Generated SSL files - gitignored, never commit         |
-| `.env.example`    | Template for environment variables                     |
-| `SECURITY.md`     | Security documentation - update for security changes   |
-| `*.sh` files      | Must have LF line endings for Linux/macOS              |
+| Directory/File      | Purpose                                                          |
+| :------------------ | :--------------------------------------------------------------- |
+| `src/server.js`     | Main server — add new API endpoints here                         |
+| `src/config.js`     | Constants, env vars, feature flags — single source of truth      |
+| `src/state.js`      | Shared mutable state — use setter functions for mutations        |
+| `src/supervisor.js`  | AI supervisor + suggestion queue                                |
+| `src/quota-service.js` | Model quota polling via language server                       |
+| `src/session-stats.js` | In-memory session analytics                                  |
+| `src/screenshot-timeline.js` | Persistent screenshot capture                          |
+| `src/cdp/connection.js` | CDP discovery and WebSocket connection                       |
+| `src/utils/`        | Network, process, hash, telegram, workspace utilities            |
+| `public/`           | Mobile UI (index.html, admin.html, login.html, minimal.html)    |
+| `public/css/`       | Modular CSS: variables, themes (5), layout, components           |
+| `public/js/`        | Client logic (app.js, admin.js, login.js, minimal.js)            |
+| `public/js/components/` | Workspace panels (assist, files, git, stats, terminal, timeline) |
+| `scripts/`          | SSL, tunnel managers, context menu installers, shell launchers   |
+| `test/unit/`        | Vitest unit tests (9 test files)                                 |
+| `test/test.js`      | Integration/smoke tests                                          |
+| `data/`             | Runtime data — gitignored, never commit                          |
+| `certs/`            | SSL certificates — gitignored, never commit                      |
+| `.env.example`      | Template for environment variables                               |
+
+## Running Tests
+
+```bash
+# Smoke/integration tests
+npm test
+
+# Unit tests
+npm run test:unit
+
+# Unit tests with file watching
+npm run test:unit:watch
+
+# Unit tests with V8 coverage
+npm run test:coverage
+
+# All tests
+npm run test:all
+```
 
 ## Testing HTTPS
 
 ```bash
 # Generate certificates
-node generate_ssl.js
+npm run setup:ssl
 
-# Restart server - should show "🔒 HTTPS enabled"
-node server.js
+# Restart server — should show "🔒 HTTPS enabled"
+npm start
 
 # Test health endpoint
-curl -k https://localhost:3000/health
+curl -k https://localhost:4747/health
 ```
+
+## Code Style
+
+- **ESM only** — never use `require()` (this is a `"type": "module"` project)
+- **JSDoc typing** — use `@ts-check` and JSDoc `@typedef`/`@param`/`@returns` annotations
+- **No inline JS** — CSP enforcement requires all scripts in external `.js` files
+- **Single responsibility** — new features should get their own module when they become product capabilities
 
 ## Author
 
-**Krishna Kanth B** (@krishnakanthb13)
+**Diego Souza** (@diegosouzapw) — Maintainer
+
+Original concept by **Krishna Kanth B** (@krishnakanthb13)

@@ -1,8 +1,35 @@
 # 📦 Release Notes
 
-All notable changes to **Antigravity Phone Connect** are documented here, in reverse chronological order (latest first).
+All notable changes to **OmniAntigravity Remote Chat** are documented here, in reverse chronological order (latest first).
 
 ---
+
+## v1.3.0 — Security Hardening & Multi-Tunnel
+**Release Date:** April 12, 2026
+
+---
+
+### 🔒 Security
+- **Content Security Policy (CSP)**: Strict `script-src 'self'` meta-tag applied to all 4 HTML pages. CSP also enforced via Express HTTP header for defense-in-depth. Prevents XSS via injected snapshot HTML.
+- **Zero-inline enforcement**: Extracted all remaining inline scripts to external files: `theme-bootstrap.js` (theme init) and `login.js` (login logic). Zero inline `<script>` tags remain.
+
+### 🚀 New Features
+- **Leaf-node isolation**: `clickElement()` now filters for inner-most matching DOM nodes, preventing clicks on parent containers.
+- **Occurrence index tracking**: Snapshot enrichment adds `data-omni-idx/text/total` attributes for deterministic targeting of duplicate elements.
+- **Pinggy tunnel support**: New SSH-based tunneling with zero binary dependencies. Supports ephemeral and token-based persistent subdomains.
+- **Multi-tunnel management**: Refactored from single `tunnelManager` to `tunnelManagers` map supporting Cloudflare and Pinggy simultaneously.
+- **Design Philosophy document**: New `DESIGN_PHILOSOPHY.md` documenting 10 core principles.
+
+### 🔧 Changes
+- **Launcher refactor**: `launcher.js` now supports `--provider` flag and cascading tunnel fallback order.
+- **Admin UI**: Tunnel panel shows provider selector dropdown (Cloudflare/Pinggy) instead of hardcoded Cloudflare-only.
+- **Auth middleware**: `/js/login.js` added to whitelist for CSP-compliant login page loading.
+
+### 🐛 Fixes
+- **WORKSPACE_ROOT injection**: Fixed ESM import hoisting bug that ignored `.env` config variables.
+- **Mobile UI Blurry Modal**: Repaired WebKit rendering bug on iOS Safari causing blurred modals.
+- **Mobile Input Layout**: Fixed iOS Safari dynamic address bar layout shifts using `100dvh`.
+
 
 ## v1.2.0 - Remote Ops Workspace & Timeline
 **Release Date:** March 29, 2026
@@ -392,8 +419,9 @@ Based on the original [Antigravity Shit-Chat](https://github.com/gherghett/Antig
 ## 📄 License
 
 Licensed under the [GNU GPL v3](LICENSE).  
-Copyright (C) 2026 **Krishna Kanth B** ([@krishnakanthb13](https://github.com/krishnakanthb13))
+Copyright (C) 2026 **Diego Souza** ([@diegosouzapw](https://github.com/diegosouzapw))  
+Original concept by **Krishna Kanth B** ([@krishnakanthb13](https://github.com/krishnakanthb13))
 
 ---
 
-*For detailed documentation, see [CODE_DOCUMENTATION.md](CODE_DOCUMENTATION.md) and [DESIGN_PHILOSOPHY.md](DESIGN_PHILOSOPHY.md).*
+*For detailed documentation, see [CODE_DOCUMENTATION.md](CODE_DOCUMENTATION.md) and [DESIGN_PHILOSOPHY.md](../DESIGN_PHILOSOPHY.md).*

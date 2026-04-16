@@ -1,7 +1,7 @@
 # 🔬 Análise Competitiva Completa — Antigravity Mobile Ecosystem
 
-**Data:** 29 de Março de 2026  
-**Projeto Base:** [OmniAntigravity Remote Chat](https://github.com/diegosouzapw/OmniAntigravityRemoteChat) v1.1.1  
+**Data:** 29 de Março de 2026 (análise original) — **Atualizado:** Abril 2026 (pós v1.3.0)  
+**Projeto Base:** [OmniAntigravity Remote Chat](https://github.com/diegosouzapw/OmniAntigravityRemoteChat) v1.3.0  
 **Repositórios Analisados:**
 1. [AntiBridge-Antigravity-remote](https://github.com/chillinh/AntiBridge-Antigravity-remote) v3.7.1
 2. [antigravity-ide-mobile](https://github.com/mrkungfudn/antigravity-ide-mobile) v2.0
@@ -17,7 +17,7 @@
 | **Stack** | Node/ESM/Vanilla JS | Node/JS | Preact/Vite/TS/Tailwind | Node/ESM/Vanilla JS |
 | **Último commit** | Ativo (≤15d) | Jan 2026 | Mar 11, 2026 | Mar 23, 2026 |
 | **PRs/Issues** | — | 0 / 0 | 0 / 0 | 0 / 0 |
-| **Arquitetura** | Monolítico (`server.js` ~101KB) | Frontend/Backend separados | Preact SPA + API | Modular (8+ serviços separados) |
+| **Arquitetura** | Modular (18 módulos, 60+ endpoints) | Frontend/Backend separados | Preact SPA + API | Modular (8+ serviços separados) |
 | **Compatibilidade** | ✅ Mais compatível | ⚠️ Windows-centric | ❌ Stack diferente | ✅ Muito compatível |
 
 > [!IMPORTANT]
@@ -37,29 +37,33 @@
 | 4 | **Troca Fast/Planning mode** | ✅ | ❌ | ❌ | ❌ | — |
 | 5 | **File Browser** | ✅ | ❌ | ✅ | ✅ + syntax highlighting | — |
 | 6 | **Multi-window CDP** | ✅ | ❌ | ✅ | ✅ + preferred workspace | — |
-| 7 | **Auto-accept commands** | ✅ (supervisor-based) | ✅ (extensão separada) | ✅ | ✅ (inline no chat-stream) | ⬆️ |
-| 8 | **Telegram Notifications** | 🟡 Básico webhook | ❌ | ❌ | ✅ **Completo** (bot interativo) | 🔴 Alta |
-| 9 | **Model Quota Monitor** | ❌ | ❌ | ✅ (v2.0 redesigned) | ✅ (language server + API) | 🔴 Alta |
-| 10 | **Error Detection (dialog)** | ❌ | ❌ | ❌ | ✅ (multi-context scanning) | 🔴 Alta |
-| 11 | **AI Supervisor (Ollama)** | 🟡 OmniRoute-based | ❌ | ❌ | ✅ **Full** (autonomous) | 🟠 Média |
-| 12 | **Suggest Mode** (human-in-loop) | ❌ | ❌ | ❌ | ✅ | 🟠 Média |
+| 7 | **Auto-accept commands** | ✅ (supervisor-based) | ✅ (extensão separada) | ✅ | ✅ (inline no chat-stream) | — |
+| 8 | **Telegram Notifications** | ✅ **Completo** (bot interativo, commands, keyboards) | ❌ | ❌ | ✅ **Completo** (bot interativo) | ✅ Implementado v1.2.0 |
+| 9 | **Model Quota Monitor** | ✅ (language server + API + alertas) | ❌ | ✅ (v2.0 redesigned) | ✅ (language server + API) | ✅ Implementado v1.2.0 |
+| 10 | **Error Detection (dialog)** | ✅ (multi-context scanning) | ❌ | ❌ | ✅ (multi-context scanning) | ✅ Implementado v1.2.0 |
+| 11 | **AI Supervisor** | ✅ OmniRoute-based (heurísticas + AI) | ❌ | ❌ | ✅ **Full** (autonomous) | ✅ Implementado v1.2.0 |
+| 12 | **Suggest Mode** (human-in-loop) | ✅ (SuggestQueue + REST + WS + Telegram) | ❌ | ❌ | ✅ | ✅ Implementado v1.2.0 |
 | 13 | **Task Queue** | ❌ | ❌ | ❌ | ✅ | 🟡 Baixa |
-| 14 | **Screenshot Timeline** | ❌ | ❌ | ❌ | ✅ (auto-capture) | 🟡 Baixa |
+| 14 | **Screenshot Timeline** | ✅ (auto-capture + persistent) | ❌ | ❌ | ✅ (auto-capture) | ✅ Implementado v1.2.0 |
 | 15 | **Cloudflare Quick Tunnel** | ✅ | ❌ | ❌ | ✅ (com QR code) | — |
-| 16 | **PWA Manifest** | ✅ | ✅ | ❌ | ✅ | — |
-| 17 | **Service Worker** | ✅ | ❌ | ❌ | ✅ | — |
-| 18 | **Modular CSS** (vars + themes) | ❌ (single CSS) | ❌ | ✅ (Tailwind) | ✅ (7 CSS files + 5 themes) | 🟠 Média |
-| 19 | **Lite/Minimal Mode** | ✅ minimal.html | ❌ | ❌ | ✅ minimal.html | — |
-| 20 | **Admin Panel separado** | ✅ admin.html | ❌ | ✅ Desktop dashboard | ✅ admin.html (localhost) | — |
-| 21 | **PIN Authentication** | ✅ Cookie-based | ❌ | ❌ | ✅ (PIN + IP rate limit) | — |
-| 22 | **Terminal Remote** | ✅ | ❌ | ✅ | ❌ | — |
-| 23 | **Git Operations** | ✅ | ❌ | ✅ | ❌ | — |
-| 24 | **Assist Chat (user ↔ supervisor)** | ❌ | ❌ | ❌ | ✅ (tab dedicado) | 🟠 Média |
-| 25 | **Screencast (live screen)** | ✅ | ❌ | ✅ | ❌ | — |
-| 26 | **Quick Commands** | ❌ | ❌ | ❌ | ✅ (prompts salvos) | 🟠 Média |
-| 27 | **Session Event Logs** | ✅ (server logs) | ❌ | ❌ | ✅ | — |
-| 28 | **i18n Multi-language** | ✅ (30 langs README) | ❌ | 🟡 (vi, en) | ❌ | — |
-| 29 | **Docker Support** | ✅ | ❌ | ❌ | ❌ | — |
+| 16 | **Pinggy Tunnel** | ✅ (SSH-based, v1.3.0) | ❌ | ❌ | ❌ | ✅ Exclusivo |
+| 17 | **PWA Manifest** | ✅ | ✅ | ❌ | ✅ | — |
+| 18 | **Service Worker** | ✅ | ❌ | ❌ | ✅ | — |
+| 19 | **Modular CSS** (vars + themes) | ✅ (8 CSS files + 5 themes) | ❌ | ✅ (Tailwind) | ✅ (7 CSS files + 5 themes) | ✅ Implementado v1.2.0 |
+| 20 | **Lite/Minimal Mode** | ✅ minimal.html | ❌ | ❌ | ✅ minimal.html | — |
+| 21 | **Admin Panel separado** | ✅ admin.html | ❌ | ✅ Desktop dashboard | ✅ admin.html (localhost) | — |
+| 22 | **PIN Authentication** | ✅ Cookie-based | ❌ | ❌ | ✅ (PIN + IP rate limit) | — |
+| 23 | **Terminal Remote** | ✅ | ❌ | ✅ | ❌ | — |
+| 24 | **Git Operations** | ✅ | ❌ | ✅ | ❌ | — |
+| 25 | **Assist Chat (user ↔ supervisor)** | ✅ (tab dedicado + markdown + ações) | ❌ | ❌ | ✅ (tab dedicado) | ✅ Implementado v1.2.0 |
+| 26 | **Screencast (live screen)** | ✅ | ❌ | ✅ | ❌ | — |
+| 27 | **Quick Commands** | ✅ (prompts salvos + admin UI) | ❌ | ❌ | ✅ (prompts salvos) | ✅ Implementado v1.2.0 |
+| 28 | **Session Event Logs** | ✅ (server logs + stats) | ❌ | ❌ | ✅ | — |
+| 29 | **i18n Multi-language** | ✅ (29 langs README) | ❌ | 🟡 (vi, en) | ❌ | — |
+| 30 | **Docker Support** | ✅ | ❌ | ❌ | ❌ | — |
+| 31 | **Content Security Policy** | ✅ (header + meta, zero inline JS) | ❌ | ❌ | ❌ | ✅ Exclusivo v1.3.0 |
+| 32 | **Vitest Unit Tests** | ✅ (9 test files, V8 coverage) | ❌ | ❌ | ✅ (18 tests) | ✅ Implementado v1.2.0 |
+| 33 | **Session Stats + Analytics** | ✅ (in-memory + painel + Telegram) | ❌ | ❌ | ✅ | ✅ Implementado v1.2.0 |
 
 ---
 
@@ -341,24 +345,38 @@ if (actionCountWindow.length >= maxPerMinute) return false;
 
 ---
 
-## 📋 Conclusão
+## 📝 Conclusão
 
-### O que já temos de vantagem competitiva:
+### O que temos de vantagem competitiva exclusiva (v1.3.0):
 1. ✅ **Git Operations** (commit, push, diff) — nenhum concorrente tem completo
 2. ✅ **Remote Terminal** — funcionalidade exclusiva  
 3. ✅ **Screencast live** — streaming real-time do IDE
 4. ✅ **Docker support** — deploy containerizado
-5. ✅ **30 language i18n** — documentação multilingual
+5. ✅ **29 language i18n** — documentação multilingual
 6. ✅ **Fast/Planning mode switching** — controle de modo do agente
-7. ✅ **JSON body limit configurável** — segurança avançada
-8. ✅ **Auto-tunnel Cloudflare** — integração automática
+7. ✅ **Content Security Policy** — CSP estrita com zero inline JS (exclusivo)
+8. ✅ **Pinggy tunnel** — SSH-based tunneling sem binários (exclusivo)
+9. ✅ **Multi-tunnel** — Cloudflare + Pinggy + ngrok com fallback automático
 
-### O que precisamos urgentemente:
-1. 🔴 **Model Quota Monitor** — dado crucial para gestão de recursos
-2. 🔴 **Telegram Bot interativo** — nosso webhook é primitivo demais
-3. 🔴 **Error Detection** — detectar modal errors automaticamente
-4. 🟠 **CSS Modular + Temas** — manutenção e customize
-5. 🟠 **Supervisor Suggest Mode** — segurança com human-in-the-loop
+### Gaps fechados desde a análise original (v1.1.1 → v1.3.0):
+
+| Gap original | Status atual | Versão implementada |
+|---|---|---|
+| 🔴 Model Quota Monitor | ✅ Implementado (language server + API + alertas) | v1.2.0 |
+| 🔴 Telegram Bot interativo | ✅ Implementado (commands, keyboards, rate-limiting) | v1.2.0 |
+| 🔴 Error Detection | ✅ Implementado (multi-context dialog scanning) | v1.2.0 |
+| 🟠 CSS Modular + Temas | ✅ Implementado (8 CSS files + 5 themes) | v1.2.0 |
+| 🟠 Supervisor Suggest Mode | ✅ Implementado (SuggestQueue + REST + WS + Telegram) | v1.2.0 |
+| 🟠 Session Stats | ✅ Implementado (in-memory + painel + Telegram /stats) | v1.2.0 |
+| 🟠 Assist Chat tab | ✅ Implementado (supervisor chat + markdown + ações) | v1.2.0 |
+| 🟠 Quick Commands UI | ✅ Implementado (persistência + admin panel) | v1.2.0 |
+| 🟡 Screenshot Timeline | ✅ Implementado (persistent + auto-capture + cleanup) | v1.2.0 |
+| 🟡 Vitest Unit Tests | ✅ Implementado (9 test files, V8 coverage) | v1.2.0 |
+
+### Único gap remanescente:
+| Gap | Prioridade | Nota |
+|---|---|---|
+| Task Queue (instruções enfileiradas para o agente) | 🟡 Baixa | Feature avançada presente apenas no AntigravityMobile. Não é bloqueante. |
 
 ### Repositório de referência principal:
-> **tody-agent/AntigravityMobile** — Stack 100% compatível (Node.js ESM + Vanilla JS), funcionalidades mais avançadas, e código modular que pode ser adaptado diretamente. É o benchmark para nosso projeto.
+> **tody-agent/AntigravityMobile** — Stack 100% compatível (Node.js ESM + Vanilla JS), funcionalidades equivalentes, e código modular. Continua sendo o benchmark para nosso projeto, mas a distância competitiva foi significativamente reduzida em v1.2.0-v1.3.0.

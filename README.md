@@ -11,7 +11,7 @@
 <br/>
 <br/>
 
-![Version](https://img.shields.io/badge/version-1.2.0-6366f1) ![Node](https://img.shields.io/badge/node-22%2B-10b981) ![CI](https://github.com/diegosouzapw/OmniAntigravityRemoteChat/actions/workflows/ci.yml/badge.svg) ![License](https://img.shields.io/badge/license-GPL--3.0-blue)
+![Version](https://img.shields.io/badge/version-1.3.0-6366f1) ![Node](https://img.shields.io/badge/node-22%2B-10b981) ![CI](https://github.com/diegosouzapw/OmniAntigravityRemoteChat/actions/workflows/ci.yml/badge.svg) ![License](https://img.shields.io/badge/license-GPL--3.0-blue)
 
 [![npm](https://img.shields.io/npm/v/omni-antigravity-remote-chat?color=cc3534&logo=npm)](https://www.npmjs.com/package/omni-antigravity-remote-chat) [![npm downloads](https://img.shields.io/npm/dm/omni-antigravity-remote-chat?color=blue&logo=npm)](https://www.npmjs.com/package/omni-antigravity-remote-chat) [![Docker](https://img.shields.io/docker/pulls/diegosouzapw/omni-antigravity-remote-chat?color=2496ED&logo=docker&logoColor=white)](https://hub.docker.com/r/diegosouzapw/omni-antigravity-remote-chat)
 
@@ -50,14 +50,13 @@ npx omni-antigravity-remote-chat
 
 That's it. Open the URL on your phone. You're in. 🚀
 
-### New in 1.2.0
+### New in 1.3.0
 
-- **Suggest Mode** with queued approvals instead of immediate execution
-- **Session Stats** and **Quota** panels inside the mobile workspace
-- **Assist tab** for asking the supervisor what is happening right now
-- **Screenshot Timeline** with persistent captures in `data/screenshots/`
-- **Five themes** (`dark`, `light`, `slate`, `pastel`, `rainbow`)
-- **Vitest unit suite** plus expanded smoke coverage
+- **Content Security Policy** — Strict CSP with zero inline JS, enforced via header + meta tags
+- **Pinggy tunnel support** — SSH-based tunneling with zero binary dependencies
+- **Leaf-node targeting** — Precise DOM click targeting with occurrence index tracking
+- **Multi-tunnel management** — Cloudflare and Pinggy with automatic fallback
+- **Design Philosophy document** — 10 core principles guiding architecture decisions
 
 ---
 
@@ -126,8 +125,8 @@ antigravity . --remote-debugging-port=7800
 | 🖼️  | **Timeline**           | Keep a persistent screenshot history with manual and automatic captures  |
 | 📱  | **Telegram Alerts**    | Get push notifications for Blocks, Task completion and Pending actions   |
 | 📋  | **Chat history**       | Browse and resume past conversations on mobile                           |
-| 🔒  | **Secure by default**  | HTTPS, password auth, cookie sessions, LAN auto-auth                     |
-| 🌐  | **Remote access**      | ngrok support with QR code — access from anywhere                        |
+| 🔒  | **Secure by default**  | HTTPS, CSP, password auth, cookie sessions, LAN auto-auth               |
+| 🌐  | **Remote access**      | Cloudflare, Pinggy, ngrok tunnels with QR code — access from anywhere   |
 | 🐳  | **Docker ready**       | One-liner container deployment                                           |
 | ♻️  | **Modular codebase**   | Clean architecture with JSDoc typing (`config`, `state`, `utils`, `cdp`) |
 
@@ -216,15 +215,15 @@ Auto-installs [mkcert](https://github.com/FiloSottile/mkcert), creates a local C
 
 ## 🧰 Remote Workspace
 
-The mobile workspace is no longer just a side panel. In `1.2.0` it includes:
+The mobile workspace provides 7 specialized panels:
 
-- **Files** for browsing and previewing project files
-- **Terminal** for remote commands and output streaming
-- **Git** for status, staging, commit and push shortcuts
-- **Assist** for supervisor-backed chat with action buttons
-- **Stats** for live session analytics
-- **Timeline** for persistent screenshot history
-- **Screen** for the live screencast stream
+- **Files** for browsing and previewing project files with syntax highlighting
+- **Terminal** for remote command execution with live output streaming
+- **Git** for status, staging, commit and push with diff summaries
+- **Assist** for supervisor-backed AI chat with contextual action buttons
+- **Stats** for real-time session analytics (messages, approvals, errors)
+- **Timeline** for persistent screenshot history with manual and auto-capture
+- **Screen** for CDP-based live screencast streaming
 
 This makes the phone UI useful for both passive monitoring and active intervention without leaving the browser.
 
@@ -236,22 +235,34 @@ This makes the phone UI useful for both passive monitoring and active interventi
 cp .env.example .env
 ```
 
-| Variable                  | Default            | Description                                   |
-| ------------------------- | ------------------ | --------------------------------------------- |
-| `APP_PASSWORD`            | `antigravity`      | Authentication password                       |
-| `PORT`                    | `4747`             | Server port                                   |
-| `COOKIE_SECRET`           | _(auto-generated)_ | Secret for cookie signing                     |
-| `AUTH_SALT`               | _(auto-generated)_ | Additional salt for auth tokens               |
-| `WORKSPACE_ROOT`          | repo root          | Root exposed in Files, Terminal and Git       |
-| `AUTO_TUNNEL_PROVIDER`    | _(optional)_       | Set to `cloudflare` for quick tunnel startup  |
-| `SUPERVISOR_SUGGEST_MODE` | `false`            | Queue supervisor actions for human review     |
-| `SUPERVISOR_MAX_QUEUE`    | `10`               | Maximum pending suggestions                   |
-| `QUOTA_ENABLED`           | `false`            | Enable background quota polling               |
-| `QUOTA_POLL_INTERVAL`     | `300000`           | Quota polling interval in ms                  |
-| `SCREENSHOT_ENABLED`      | `false`            | Enable automatic screenshot timeline capture  |
-| `SCREENSHOT_INTERVAL`     | `60000`            | Timeline capture interval in ms               |
-| `SCREENSHOT_MAX`          | `100`              | Maximum screenshots persisted on disk         |
-| `NGROK_AUTHTOKEN`         | _(optional)_       | For remote access via ngrok                   |
+| Variable                          | Default            | Description                                     |
+| --------------------------------- | ------------------ | ----------------------------------------------- |
+| `APP_PASSWORD`                    | `antigravity`      | Authentication password                         |
+| `PORT`                            | `4747`             | Server port                                     |
+| `CDP_PORTS`                       | `7800,7801,7802,7803` | CDP debug ports to scan (comma-separated)    |
+| `COOKIE_SECRET`                   | _(auto-generated)_ | Secret for cookie signing                       |
+| `AUTH_SALT`                       | _(auto-generated)_ | Additional salt for auth tokens                 |
+| `WORKSPACE_ROOT`                  | repo root          | Root exposed in Files, Terminal and Git         |
+| `AUTO_TUNNEL_PROVIDER`            | _(optional)_       | Auto-start tunnel (`cloudflare` or `pinggy`)    |
+| `TUNNEL_PROVIDER`                 | `cloudflare`       | Preferred provider for launcher `--mode web`    |
+| `CLOUDFLARE_TUNNEL_BIN`           | `cloudflared`      | Path to cloudflared binary                      |
+| `PINGGY_TOKEN`                    | _(optional)_       | Pinggy API token for persistent subdomains      |
+| `PINGGY_SSH_BIN`                  | `ssh`              | Path to SSH binary for Pinggy tunnels           |
+| `OMNIROUTE_SUPERVISOR_ENABLED`    | `false`            | Enable the AI supervisor                        |
+| `OMNIROUTE_SUPERVISOR_BASE_URL`   | `http://127.0.0.1:20128/v1` | OmniRoute API endpoint              |
+| `OMNIROUTE_SUPERVISOR_API_KEY`    | `sk_omniroute`     | OmniRoute API key                               |
+| `OMNIROUTE_SUPERVISOR_MODEL`      | `if/kimi-k2-thinking` | Supervisor model                             |
+| `SUPERVISOR_SUGGEST_MODE`         | `false`            | Queue supervisor actions for human review       |
+| `SUPERVISOR_MAX_QUEUE`            | `10`               | Maximum pending suggestions                     |
+| `QUOTA_ENABLED`                   | `false`            | Enable background quota polling                 |
+| `QUOTA_POLL_INTERVAL`             | `300000`           | Quota polling interval in ms                    |
+| `SCREENSHOT_ENABLED`              | `false`            | Enable automatic screenshot timeline capture    |
+| `SCREENSHOT_INTERVAL`             | `60000`            | Timeline capture interval in ms                 |
+| `SCREENSHOT_MAX`                  | `100`              | Maximum screenshots persisted on disk           |
+| `NGROK_AUTHTOKEN`                 | _(optional)_       | For remote access via ngrok                     |
+| `TELEGRAM_BOT_TOKEN`              | _(optional)_       | Telegram bot token for push notifications       |
+| `TELEGRAM_CHAT_ID`                | _(optional)_       | Telegram chat ID for notifications              |
+| `TELEGRAM_RATE_LIMIT`             | `30`               | Max Telegram messages per minute                |
 
 ---
 
@@ -271,19 +282,29 @@ cp .env.example .env
 ```
 ├── src/
 │   ├── server.js              # Main server (Express + WS + CDP actions)
-│   ├── config.js              # Constants, env vars, container IDs
+│   ├── config.js              # Constants, env vars, feature flags, version
+│   ├── env.js                 # dotenv bootstrap
 │   ├── state.js               # Shared state + JSDoc type definitions
+│   ├── supervisor.js          # AI supervisor (OmniRoute) + suggest queue
+│   ├── quota-service.js       # Model quota polling
+│   ├── session-stats.js       # In-memory session analytics
+│   ├── screenshot-timeline.js # Persistent screenshot capture
+│   ├── ui_inspector.js        # UI DOM inspection utilities
 │   ├── cdp/
 │   │   └── connection.js      # CDP discovery & connection
 │   └── utils/
 │       ├── network.js         # getLocalIP, isLocalRequest, getJson
 │       ├── process.js         # killPortProcess, launchAntigravity
-│       └── hash.js            # Hash utility
-├── public/                    # Mobile chat interface
-├── launcher.js                # QR code + ngrok launcher
-├── scripts/                   # SSL, context menu installers
-├── test/                      # Validation test suite
-├── Dockerfile                 # Docker support
+│       ├── hash.js            # djb2 hash for diff detection
+│       ├── telegram.js        # Telegram bot integration
+│       └── workspace.js       # File browser, terminal, Git, uploads
+├── public/                    # Mobile interface (4 HTML pages, modular CSS/JS)
+│   ├── js/components/         # Workspace panels (6 modules)
+│   └── css/                   # Modular CSS (8 files, 5 themes)
+├── launcher.js                # QR code + tunnel orchestration
+├── scripts/                   # SSL, tunnel managers, context menu, WSL
+├── test/                      # Smoke tests + Vitest unit tests (9 files)
+├── Dockerfile                 # Docker support (node:22-alpine)
 └── .github/workflows/         # CI + auto-release + Docker Hub
 ```
 

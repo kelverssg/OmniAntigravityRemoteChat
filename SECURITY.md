@@ -1,4 +1,4 @@
-# SECURITY - OmniAntigravity Remote Chat
+# SECURITY — OmniAntigravity Remote Chat v1.3.0
 
 This document explains the security model, HTTPS setup, and how to handle browser warnings.
 
@@ -6,7 +6,7 @@ This document explains the security model, HTTPS setup, and how to handle browse
 
 ## 🔒 HTTPS & SSL Certificates
 
-Antigravity Phone Connect supports HTTPS for secure connections between your phone and desktop.
+OmniAntigravity Remote Chat supports HTTPS for secure connections between your phone and desktop.
 
 ### Why HTTPS?
 
@@ -113,7 +113,7 @@ All browsers will show **"Not Secure"** but **"Encrypted"** - this is expected!
 
 ## 🔑 Passcode Protection (NEW)
 
-To secure your session when accessing it globally, Antigravity Phone Connect now includes a built-in authentication layer.
+To secure your session when accessing it remotely, OmniAntigravity Remote Chat includes a built-in authentication layer.
 
 ### How it Works
 
@@ -131,7 +131,18 @@ APP_PASSWORD=your_secure_password
 XXX_API_KEY=your-ai-provider-key
 ```
 
-_If no password is set, the server will generate a **temporary 6-digit passcode** each time it starts and display it in the terminal._
+_If no password is set, the default password `antigravity` is used._
+
+### Content Security Policy (CSP)
+
+Since v1.3.0, the application enforces strict Content Security Policy:
+
+- **HTTP Header + Meta Tags**: CSP is enforced via both mechanisms for defense-in-depth.
+- **`script-src 'self'`**: Only scripts from the same origin are allowed — zero inline JS.
+- **`frame-src 'none'`**: No iframe embedding allowed.
+- **`object-src 'none'`**: No plugin/embed objects.
+
+This prevents mirrored snapshot HTML from executing injected scripts in the mobile browser.
 
 ---
 
@@ -153,11 +164,12 @@ _If no password is set, the server will generate a **temporary 6-digit passcode*
 
 ### Remote Access Strategy
 
-| Method                 | Safety    | Recommendation                                                                      |
-| ---------------------- | --------- | ----------------------------------------------------------------------------------- |
-| **Local Wi-Fi**        | 🟢 High   | Default mode, no password required.                                                 |
-| **\_web Mode (ngrok)** | 🟡 Medium | Use `APP_PASSWORD` in `.env` (cloned from `.env.example`) for secure global access. |
-| **Port Forwarding**    | 🔴 Low    | **NOT RECOMMENDED**. Use the built-in `_web` tunnel instead.                        |
+| Method                                     | Safety    | Recommendation                                                                      |
+| ------------------------------------------ | --------- | ----------------------------------------------------------------------------------- |
+| **Local Wi-Fi**                            | 🟢 High   | Default mode, no password required.                                                 |
+| **Cloudflare / Pinggy tunnel**             | 🟡 Medium | Preferred remote method. Set `APP_PASSWORD` in `.env` for secure global access.     |
+| **ngrok tunnel**                           | 🟡 Medium | Use `NGROK_AUTHTOKEN` + `APP_PASSWORD` in `.env`.                                   |
+| **Port Forwarding**                        | 🔴 Low    | **NOT RECOMMENDED**. Use the built-in tunnel providers instead.                     |
 
 ### Recommendations
 
@@ -174,7 +186,9 @@ _If no password is set, the server will generate a **temporary 6-digit passcode*
 ### Generating Certificates
 
 ```bash
-node generate_ssl.js
+npm run setup:ssl
+# Or manually:
+node scripts/generate_ssl.js
 ```
 
 **What it does:**
@@ -218,10 +232,10 @@ rm -rf certs/     # Linux/macOS
 rmdir /s certs    # Windows
 
 # Generate new ones
-node generate_ssl.js
+npm run setup:ssl
 
 # Restart server
-node server.js
+npm start
 ```
 
 Note: After regenerating, you'll need to accept the browser warning again on all devices.
@@ -312,7 +326,7 @@ sudo yum install openssl    # RHEL/CentOS
 
 ## 📚 Related Documentation
 
-- [README.md](README.md) - Quick start and HTTPS setup instructions
-- [CODE_DOCUMENTATION.md](CODE_DOCUMENTATION.md) - Technical details of SSL implementation
-- [DESIGN_PHILOSOPHY.md](DESIGN_PHILOSOPHY.md) - Security design decisions
-- [CONTRIBUTING.md](CONTRIBUTING.md) - Security checklist for contributors
+- [README.md](README.md) — Quick start and HTTPS setup instructions
+- [docs/CODE_DOCUMENTATION.md](docs/CODE_DOCUMENTATION.md) — Full technical architecture
+- [DESIGN_PHILOSOPHY.md](DESIGN_PHILOSOPHY.md) — 10 core design principles
+- [CONTRIBUTING.md](CONTRIBUTING.md) — Contributor guidelines and security checklist
