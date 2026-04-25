@@ -663,6 +663,31 @@ async function captureSnapshot(cdp) {
         
         // Clone cascade to modify it without affecting the original
         const clone = cascade.cloneNode(true);
+        const wrapper = document.createElement('div');
+        wrapper.appendChild(clone);
+        
+        // Append floating dialogs/modals that are outside the cascade
+        try {
+            const dialogs = document.querySelectorAll(
+                '[role="dialog"], .dialog-shadow, .monaco-dialog-box, ' +
+                '[class*="dialog"], [class*="notification-toast"], ' +
+                '[class*="error-widget"], .notifications-toasts, ' +
+                '.monaco-menu-container, [class*="context-view"]'
+            );
+            
+            const addedDialogs = new Set();
+            dialogs.forEach(d => {
+                if (cascade.contains(d)) return;
+                if (d.offsetParent === null && !d.closest('[class*="toast"]')) return;
+                if (addedDialogs.has(d) || Array.from(addedDialogs).some(parent => parent.contains(d))) return;
+                
+                const dClone = d.cloneNode(true);
+                dClone.style.position = 'fixed';
+                dClone.style.zIndex = '9999';
+                wrapper.appendChild(dClone);
+                addedDialogs.add(d);
+            });
+        } catch (e) {}
         
         // Aggressively remove the entire interaction/input/review area
         try {
@@ -677,7 +702,7 @@ async function captureSnapshot(cdp) {
             ];
 
             interactionSelectors.forEach(selector => {
-                clone.querySelectorAll(selector).forEach(el => {
+                wrapper.querySelectorAll(selector).forEach(el => {
                     try {
                         // For the editor, we want to remove its interaction container
                         if (selector === '[contenteditable="true"]') {
@@ -685,7 +710,7 @@ async function captureSnapshot(cdp) {
                                          el.closest('.flex.grow.flex-col.justify-start.gap-8') ||
                                          el.closest('div[id^="interaction"]') ||
                                          el.parentElement?.parentElement;
-                            if (area && area !== clone) area.remove();
+                            if (area && area !== wrapper && area !== clone) area.remove();
                             else el.remove();
                         } else {
                             el.remove();
@@ -695,7 +720,7 @@ async function captureSnapshot(cdp) {
             });
 
             // 2. Text-based cleanup for stray status bars
-            const allElements = clone.querySelectorAll('*');
+            const allElements = wrapper.querySelectorAll('*');
             allElements.forEach(el => {
                 try {
                     const text = (el.innerText || '').toLowerCase();
@@ -710,7 +735,7 @@ async function captureSnapshot(cdp) {
 
             // 3. Base64 image conversion — convert local SVGs/images to data URIs
             //    This prevents broken images when accessing via ngrok/remote
-            clone.querySelectorAll('img[src], svg').forEach(el => {
+            wrapper.querySelectorAll('img[src], svg').forEach(el => {
                 try {
                     if (el.tagName === 'SVG') {
                         const svgData = new XMLSerializer().serializeToString(el);
@@ -736,7 +761,7 @@ async function captureSnapshot(cdp) {
             });
 
             const textGroups = new Map();
-            Array.from(clone.querySelectorAll('button, [role="button"], a, summary, span, div, p')).forEach(el => {
+            Array.from(wrapper.querySelectorAll('button, [role="button"], a, summary, span, div, p')).forEach(el => {
                 try {
                     if (!isInteractiveCandidate(el)) return;
                     const text = normalizeText(el.textContent || el.innerText || '');
@@ -756,7 +781,7 @@ async function captureSnapshot(cdp) {
             });
         } catch (globalErr) { }
         
-        const html = clone.outerHTML;
+        const html = wrapper.innerHTML;
         
         const rules = [];
         for (const sheet of document.styleSheets) {
