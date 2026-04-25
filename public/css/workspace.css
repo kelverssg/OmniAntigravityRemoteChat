@@ -60,6 +60,8 @@
   border-radius: var(--radius-md);
   box-shadow: var(--shadow-soft);
   padding: 14px;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
 }
 
 .split-card {
@@ -109,6 +111,12 @@
   border-radius: 14px;
   border: var(--border-width) solid var(--border);
   background: var(--bg-card);
+  box-shadow: var(--shadow-xs);
+  transition: transform var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.file-entry:active {
+  transform: scale(0.98);
 }
 
 .file-entry button,

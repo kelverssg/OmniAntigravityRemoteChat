@@ -54,17 +54,18 @@
 
 .icon-btn,
 .ghost-link {
-  min-width: 38px;
-  height: 38px;
-  padding: 0 12px;
-  border-radius: 14px;
+  min-width: 34px;
+  height: 34px;
+  padding: 0 10px;
+  border-radius: 12px;
+  font-size: var(--font-size-sm);
 }
 
 .icon-btn svg,
 .send-btn svg,
 .fab svg {
-  width: 18px;
-  height: 18px;
+  width: 16px;
+  height: 16px;
   fill: none;
   stroke: currentColor;
   stroke-width: 2;
@@ -113,7 +114,7 @@
 .workspace-tab,
 .action-chip,
 .setting-chip {
-  padding: 10px 14px;
+  padding: 7px 11px;
   border-radius: var(--radius-pill);
   white-space: nowrap;
   cursor: pointer;
@@ -122,8 +123,8 @@
 .setting-chip {
   display: inline-flex;
   align-items: center;
-  gap: var(--space-xs);
-  font-size: var(--font-size-md);
+  gap: 5px;
+  font-size: var(--font-size-sm);
 }
 
 .setting-chip-static {
@@ -141,6 +142,7 @@
   background: var(--accent-soft);
   border-color: var(--accent-border);
   color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-ring);
 }
 
 .action-chip {
@@ -390,6 +392,8 @@ textarea {
   border: var(--border-width) solid var(--border);
   background: var(--bg-card);
   padding: 14px;
+  box-shadow: var(--shadow-xs);
+  transition: transform var(--transition-fast), box-shadow var(--transition-fast);
 }
 
 .meta-card strong {

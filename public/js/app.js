@@ -740,6 +740,33 @@ function buildSnapshotStyles(cssText) {
     img[src^="/c:"], img[src^="/C:"], img[src*="AppData"] {
       display: none !important;
     }
+    /* Fix Codicon icons — VS Code icon font rendered via CDN */
+    .codicon[class*="codicon-"] {
+      font-family: 'codicon' !important;
+      font-size: 14px !important;
+      line-height: 1 !important;
+      display: inline-flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+    }
+    /* Hide broken codicon text fallbacks from snapshot */
+    .codicon:not([class*="codicon-"]) {
+      font-size: 0 !important;
+      width: 16px !important;
+      height: 16px !important;
+    }
+    /* Interactive buttons inside snapshot: subtle accent styling */
+    [data-omni-text] {
+      border: 1px solid ${border} !important;
+      border-radius: 8px !important;
+      padding: 6px 12px !important;
+      cursor: pointer !important;
+      transition: background 0.15s ease, border-color 0.15s ease !important;
+    }
+    [data-omni-text]:hover {
+      border-color: ${link} !important;
+      background: ${card} !important;
+    }
   `;
 }
 

@@ -69,6 +69,12 @@
   border-radius: 14px;
   border: var(--border-width) solid var(--border);
   background: var(--bg-card);
+  box-shadow: var(--shadow-xs);
+  transition: transform var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.history-item:active {
+  transform: scale(0.98);
 }
 
 .history-item.active {

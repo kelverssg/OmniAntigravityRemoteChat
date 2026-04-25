@@ -109,7 +109,7 @@ const CONTENT_SECURITY_POLICY = [
     "default-src 'self'",
     "script-src 'self'",
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com",
-    "font-src 'self' https://fonts.gstatic.com data:",
+    "font-src 'self' https://fonts.gstatic.com https://cdnjs.cloudflare.com data:",
     "img-src 'self' data: blob:",
     "connect-src 'self' ws: wss:",
     "worker-src 'self'",

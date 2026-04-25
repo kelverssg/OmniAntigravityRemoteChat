@@ -29,8 +29,8 @@ body::before {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: var(--space-md);
-  padding: var(--space-md);
+  gap: var(--space-sm);
+  padding: var(--space-sm) var(--space-md);
   background: var(--bg-panel);
   backdrop-filter: blur(24px);
   -webkit-backdrop-filter: blur(24px);
@@ -79,15 +79,15 @@ body::before {
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: var(--space-xs);
+  gap: 6px;
   flex-wrap: wrap;
 }
 
 .settings-bar {
   display: flex;
-  gap: var(--space-xs);
+  gap: 6px;
   overflow-x: auto;
-  padding: var(--space-sm) var(--space-md);
+  padding: var(--space-xs) var(--space-md);
   background: var(--bg-panel-muted);
   border-bottom: var(--border-width) solid var(--border);
   backdrop-filter: blur(20px);
