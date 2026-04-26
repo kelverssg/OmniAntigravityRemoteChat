@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.3.1] - 2026-04-25
+
+### Fixed
+- 🐛 **Bug Fix:** Action buttons and modal dialogs (like "Allow in Workspace" or terminal permissions) that exist outside the main chat container are now correctly captured and rendered in the Omnichat remote view (#16, #17).
+
 ## [1.3.0] - 2026-04-12
 
 ### Security
