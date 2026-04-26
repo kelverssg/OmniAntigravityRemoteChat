@@ -25,7 +25,10 @@ const SUGGESTION_TTL_MS = 30 * 60 * 1000;
 function normalizeBaseUrl(url) {
     const trimmed = String(url || '').trim().replace(/\/+$/, '');
     if (!trimmed) return 'http://127.0.0.1:20128/v1';
-    return trimmed.endsWith('/v1') ? trimmed : `${trimmed}/v1`;
+    if (trimmed.endsWith('/v1') || trimmed.endsWith('/openai')) {
+        return trimmed;
+    }
+    return `${trimmed}/v1`;
 }
 
 /**
