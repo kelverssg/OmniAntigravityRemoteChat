@@ -31,6 +31,7 @@ Estado final após execução:
 - Resultado final: `67` testes unitários verdes
 - O servidor sobe, endpoints principais respondem, WebSocket conecta e as rotas novas de `quota`, `assist` e `timeline` respondem
 - Foi tentada uma validação CDP real em `2026-03-29`, mas nenhuma instância local expôs as portas `7800-7803` durante a verificação
+- **VALIDAÇÃO FINAL (2026-04-26):** Após correção do protocolo de lançamento (porta `7800` via Electron), o smoke test completo validou: envio de mensagens, snapshots, stats, quota e timeline via CDP real. Projeto em 100%.
 
 Observação importante de execução:
 

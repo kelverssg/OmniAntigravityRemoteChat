@@ -126,7 +126,7 @@
 - [x] Atualizar `README.md`
 - [x] Atualizar `README.pt-BR.md`
 - [x] Marcar o plano como `12/12` concluído
-- [ ] Validar o fluxo com CDP real ativo
+- [x] Validar o fluxo com CDP real ativo
 
 Observação:
 
