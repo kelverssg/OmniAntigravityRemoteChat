@@ -9,6 +9,8 @@
 import './env.js';
 import express from 'express';
 import { discoverCDP, connectCDP } from './cdp/connection.js';
+import { getJson } from './utils/network.js';
+import { PORTS } from './config.js';
 
 const app = express();
 app.use(express.json());
@@ -46,12 +48,19 @@ async function connect() {
 async function injectMessage(cdp, text) {
     const safeText = JSON.stringify(text);
     const EXPRESSION = `(async () => {
-        const cancel = document.querySelector('[data-tooltip-id="input-send-button-cancel-tooltip"]');
+        // Busy check — stop/cancel button visible (VS Code era + Gemini era)
+        const cancel = document.querySelector('[data-tooltip-id="input-send-button-cancel-tooltip"]')
+                    || document.querySelector('button[aria-label="Stop"]')
+                    || document.querySelector('button[aria-label="Cancel"]');
         if (cancel && cancel.offsetParent !== null) return { ok:false, reason:"busy" };
-        const editors = [...document.querySelectorAll('#conversation [contenteditable="true"], #chat [contenteditable="true"], #cascade [contenteditable="true"]')]
-            .filter(el => el.offsetParent !== null);
-        const editor = editors.at(-1);
+
+        // Editor: Gemini Antigravity (Lexical) → VS Code fallback
+        const editor = document.querySelector('[data-lexical-editor="true"][contenteditable="true"]')
+                    || document.querySelector('[aria-label="Message input"]')
+                    || [...document.querySelectorAll('#conversation [contenteditable="true"], #chat [contenteditable="true"], #cascade [contenteditable="true"]')]
+                        .filter(el => el.offsetParent !== null).at(-1);
         if (!editor) return { ok:false, error:"editor_not_found" };
+
         const textToInsert = ${safeText};
         editor.focus();
         document.execCommand?.("selectAll", false, null);
@@ -60,10 +69,17 @@ async function injectMessage(cdp, text) {
         try { inserted = !!document.execCommand?.("insertText", false, textToInsert); } catch {}
         if (!inserted) {
             editor.textContent = textToInsert;
-            editor.dispatchEvent(new InputEvent("beforeinput", { bubbles:true, inputType:"insertText", data: textToInsert }));
-            editor.dispatchEvent(new InputEvent("input", { bubbles:true, inputType:"insertText", data: textToInsert }));
+            editor.dispatchEvent(new InputEvent("beforeinput", { bubbles:true, inputType:"insertText", data: textToInsert, composed:true }));
+            editor.dispatchEvent(new InputEvent("input", { bubbles:true, inputType:"insertText", data: textToInsert, composed:true }));
         }
-        await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+
+        await new Promise(r => setTimeout(r, 200));
+
+        // Submit: Gemini "Send message" button → VS Code lucide-arrow-right fallback
+        const box = document.getElementById('antigravity.agentSidePanelInputBox');
+        const sendBtn = (box ? [...box.querySelectorAll('button')] : [...document.querySelectorAll('button')])
+            .find(b => b.getAttribute('aria-label') === 'Send message');
+        if (sendBtn && !sendBtn.disabled) { sendBtn.click(); return { ok:true, method:"click_send" }; }
         const submit = document.querySelector("svg.lucide-arrow-right")?.closest("button");
         if (submit && !submit.disabled) { submit.click(); return { ok:true, method:"click_submit" }; }
         editor.dispatchEvent(new KeyboardEvent("keydown", { bubbles:true, key:"Enter", code:"Enter" }));
@@ -74,12 +90,33 @@ async function injectMessage(cdp, text) {
     for (const ctx of cdp.contexts) {
         try {
             const result = await cdp.call("Runtime.evaluate", {
-                expression: EXPRESSION, returnByValue: true, awaitPromise: true, contextId: ctx.id
+                expression: EXPRESSION, returnByValue: true, awaitPromise: true, contextId: ctx.id, timeout: 5000
             });
             if (result.result?.value) return result.result.value;
         } catch {}
     }
     return { ok: false, reason: "no_context" };
+}
+
+// ── Method 2: scan all tabs and retry on editor_not_found ─────────
+async function injectMessageAnyTab(text) {
+    for (const port of PORTS) {
+        let list;
+        try { list = await getJson(`http://127.0.0.1:${port}/json/list`); } catch { continue; }
+        for (const tab of list) {
+            if (!tab.webSocketDebuggerUrl) continue;
+            let conn;
+            try { conn = await connectCDP(tab.webSocketDebuggerUrl); } catch { continue; }
+            try {
+                const result = await injectMessage(conn, text);
+                conn.ws.close();
+                if (result.ok !== false) return { ...result, tab: tab.title || tab.id, method2: true };
+            } catch {
+                conn.ws.close();
+            }
+        }
+    }
+    return { ok: false, error: 'editor_not_found_all_tabs' };
 }
 
 // ── Routes ────────────────────────────────────────────────────────
@@ -88,6 +125,11 @@ app.post('/send', async (req, res) => {
     if (!message) return res.status(400).json({ error: 'Message required' });
     if (!cdpConnection) return res.status(503).json({ error: 'CDP not connected' });
     const result = await injectMessage(cdpConnection, message);
+    if (result.error === 'editor_not_found') {
+        console.log('[cdp] editor_not_found on primary tab — scanning all tabs (method 2)');
+        const result2 = await injectMessageAnyTab(message);
+        return res.json({ success: result2.ok !== false, method: result2.method || 'attempted', details: result2 });
+    }
     res.json({ success: result.ok !== false, method: result.method || 'attempted', details: result });
 });
 

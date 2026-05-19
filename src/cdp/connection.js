@@ -35,6 +35,17 @@ export async function discoverCDP() {
                 console.log('Found Jetski/Launchpad target:', jetski.title);
                 return { port, url: jetski.webSocketDebuggerUrl };
             }
+
+            // Priority 3: Revamped Gemini-based Antigravity (local HTTPS app — title changes per conversation)
+            const gemini = list.find(t =>
+                t.type === 'page' &&
+                t.webSocketDebuggerUrl &&
+                t.url?.match(/^https?:\/\/127\.0\.0\.1:\d+/)
+            );
+            if (gemini?.webSocketDebuggerUrl) {
+                console.log('Found Gemini Antigravity target:', gemini.title || gemini.url);
+                return { port, url: gemini.webSocketDebuggerUrl };
+            }
         } catch (e) {
             errors.push(`${port}: ${/** @type {Error} */(e).message}`);
         }
