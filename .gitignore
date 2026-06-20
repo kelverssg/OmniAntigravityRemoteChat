@@ -44,3 +44,4 @@ registry/
 docs/REDDIT_*
 docs/LAUNCH_*
 docs/PRD_*
+.gstack/
