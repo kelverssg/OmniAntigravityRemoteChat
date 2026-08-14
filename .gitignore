@@ -45,3 +45,6 @@ docs/REDDIT_*
 docs/LAUNCH_*
 docs/PRD_*
 .gstack/
+
+# Dated backups taken before edits — never commit
+*.bak-*

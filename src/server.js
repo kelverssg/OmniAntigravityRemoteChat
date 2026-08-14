@@ -330,6 +330,8 @@ const PORT = 4747;
 
 let cdpConnection = null;
 let lastSnapshot = null;
+let bodyParserOk = null;   // null = self-test not finished; false = POST path broken
+let selfTestError = null;
 
 // ── CDP auto-connect ──────────────────────────────────────────────
 async function connect() {
@@ -388,7 +390,15 @@ async function injectMessage(cdp, text) {
 
         // Staging check (Lexical input boundary verification)
         const editorText = editor.innerText || editor.textContent || "";
-        const staged = editorText.replace(/\\s/g, '').includes(textToInsert.replace(/\\s/g, ''));
+        const normalizeForStaging = value => value.replace(/[\\s\\\\\`]/g, '');
+        const actual = normalizeForStaging(editorText);
+        const expected = normalizeForStaging(textToInsert);
+        const minExpected = Math.floor(expected.length * 0.85);
+        const head = expected.slice(0, Math.min(80, expected.length));
+        const tail = expected.slice(Math.max(0, expected.length - 80));
+        const staged = expected.length === 0
+            || actual.includes(expected)
+            || (actual.length >= minExpected && actual.includes(head) && actual.includes(tail));
         if (!staged) {
             return { ok: false, error: "staging_failed", domStatus: "editor_found_unverified" };
         }
@@ -446,26 +456,111 @@ async function injectMessageAnyTab(text) {
 }
 
 // ── Routes ────────────────────────────────────────────────────────
+// ── /send duplicate suppression + busy backoff ────────────────────
+// Two independent callers POST here — send_to_ntg.py and cli-channel-daemon.py's
+// _ping_ntg — and neither can see the other's traffic. /send also used to fail fast
+// on a busy editor, which pushed every caller into its own retry loop; on 2026-08-15
+// that put the same message into ntg's IDE three times. The backoff removes the
+// reason to retry, and the dedupe window makes a caller-side retry harmless anyway.
+const SEND_DEDUPE_MS = 120_000;
+const SEND_BACKOFF_MS = [1000, 2000, 4000];
+const recentSends = new Map();   // hash -> ts of last SUCCESSFUL injection
+
+function sendHash(s) {
+    return crypto.createHash('sha256').update(s).digest('hex').slice(0, 16);
+}
+
+function isRecentDuplicate(hash) {
+    const now = Date.now();
+    for (const [k, ts] of recentSends) {
+        if (now - ts > SEND_DEDUPE_MS) recentSends.delete(k);
+    }
+    return recentSends.has(hash);
+}
+
+// Serialize /send. The dedupe check and the map write are separated by an await —
+// the busy backoff alone can hold the gap open for 7s — so two concurrent identical
+// requests would both read an empty map and both inject. Node being single-threaded
+// does not help: every await is a yield point. Found by cdx, seconded by ntg, on a
+// first version whose tests were all sequential and so could not observe it.
+// The lock also stops two DIFFERENT messages colliding inside injectMessage's 200ms
+// staging window, where the second selectAll+delete would eat the first.
+// Liveness, not just chain hygiene (adv2's pressure point, and it was a real gap):
+// this is express 4.22.1 with no error-handling middleware and no unhandledRejection
+// hook, so a throw inside an async route is silently dropped and the CALLER HANGS
+// until its own timeout — 35s for send_to_ntg.py, 10s for the daemon. So the lock
+// never rejects. It resolves a {threw} sentinel, the route logs it and answers 500,
+// and no dedupe window opens, which leaves a genuine failure retryable.
+let sendLock = Promise.resolve();
+function withSendLock(fn) {
+    const run = sendLock.then(fn, fn);
+    sendLock = run.then(() => {}, () => {});   // a rejection must never poison the chain
+    return run.catch(err => ({ threw: err }));
+}
+
 app.post('/send', async (req, res) => {
     const { message } = req.body;
     if (!message) return res.status(400).json({ error: 'Message required' });
     if (!cdpConnection) return res.status(503).json({ error: 'CDP not connected' });
-    
+
+    const msgHash = sendHash(message);
     const traceInfo = { status: 'bypassed', rawQueryHash: '', canonicalQueryHash: '', recalledIds: [], latencyMs: 0 };
-    const injectedMessage = await handleMemoryRecall(message, cdpConnection, traceInfo);
-    
-    // Inject message (primary tab)
-    let result = await injectMessage(cdpConnection, injectedMessage);
-    
-    // Method-2 Fallback check (only if primary had editor_not_found)
-    if (!result.ok && result.error === 'editor_not_found') {
-        console.log('[cdp] editor_not_found on primary tab — scanning all tabs (method 2)');
-        result = await injectMessageAnyTab(injectedMessage);
+
+    // Everything from the dedupe check to the map write runs under one lock, so a
+    // concurrent identical request cannot slip through the gap.
+    const outcome = await withSendLock(async () => {
+        if (isRecentDuplicate(msgHash)) {
+            console.log(`[dedupe] suppressed duplicate /send within ${SEND_DEDUPE_MS / 1000}s (hash ${msgHash})`);
+            return { deduped: true };
+        }
+
+        const injectedMessage = await handleMemoryRecall(message, cdpConnection, traceInfo);
+
+        // Inject message (primary tab), backing off while the editor is busy.
+        // injectMessage returns reason:"busy" BEFORE touching the editor, so a retry
+        // here cannot double-inject.
+        let result;
+        for (let i = 0; ; i++) {
+            result = await injectMessage(cdpConnection, injectedMessage);
+            if (result.ok !== false || result.reason !== 'busy' || i >= SEND_BACKOFF_MS.length) break;
+            console.log(`[backoff] editor busy — retry ${i + 1}/${SEND_BACKOFF_MS.length} in ${SEND_BACKOFF_MS[i]}ms`);
+            await new Promise(r => setTimeout(r, SEND_BACKOFF_MS[i]));
+        }
+
+        // Method-2 Fallback check (only if primary had editor_not_found)
+        if (!result.ok && result.error === 'editor_not_found') {
+            console.log('[cdp] editor_not_found on primary tab — scanning all tabs (method 2)');
+            result = await injectMessageAnyTab(injectedMessage);
+        }
+
+        // Only a delivered message opens a dedupe window; a failed send must stay retryable.
+        if (result.ok !== false) recentSends.set(msgHash, Date.now());
+        return { result };
+    });
+
+    if (outcome.threw) {
+        const e = outcome.threw;
+        console.error(`[send] injection threw — answering 500 rather than hanging the caller: ${e?.stack || e}`);
+        return res.status(500).json({
+            success: false,
+            method: 'error',
+            details: { ok: false, error: String(e?.message || e), domStatus: 'attempted' }
+        });
     }
-    
+
+    if (outcome.deduped) {
+        return res.json({
+            success: true,
+            method: 'deduped',
+            details: { ok: true, deduped: true, reason: 'duplicate_suppressed', hash: msgHash }
+        });
+    }
+
+    const result = outcome.result;
+
     // Determine DOM status from final result
     const domStatus = result.domStatus || 'attempted';
-    
+
     // Finalize state accounting
     if (traceInfo.status === 'recall_ok') {
         if (result.ok) {
@@ -474,11 +569,11 @@ app.post('/send', async (req, res) => {
             traceInfo.status = 'injection_failed';
         }
     }
-    
+
     recordTurn(traceInfo.status);
     const sessionId = await getActiveSessionId(cdpConnection);
     refreshHealthStatus(sessionId);
-    
+
     // Structured audit logging including latencyMs
     console.log(`[recall-audit] sessionId: ${sessionId}, status: ${traceInfo.status}, domStatus: ${domStatus}, latencyMs: ${traceInfo.latencyMs}, rawQueryHash: ${traceInfo.rawQueryHash}, canonicalQueryHash: ${traceInfo.canonicalQueryHash}, recalledIds: ${JSON.stringify(traceInfo.recalledIds || [])}`);
 
@@ -590,8 +685,12 @@ app.get('/health', async (req, res) => {
     const isCorrupted = corruptedSessions.has(sessionId);
     
     res.json({
-        status: lastState === 'healthy' ? 'ok' : 'degraded',
+        // A green CDP link is not a working bridge — if the POST path is broken,
+        // /send is dead regardless of what CDP says, so report degraded.
+        status: (lastState === 'healthy' && bodyParserOk !== false) ? 'ok' : 'degraded',
         cdpConnected: cdpConnection?.ws?.readyState === 1,
+        postPathOk: bodyParserOk,
+        selfTestError,
         uptime: process.uptime(),
         timestamp: new Date().toISOString(),
         degradedReason,
@@ -618,8 +717,35 @@ app.get('/health', async (req, res) => {
     });
 });
 
+// ── Boot self-test ────────────────────────────────────────────────
+// /health only ever checked CDP, so it stayed green while every POST died:
+// body-parser lazily requires iconv-lite on the first request, and that read
+// failed with EDEADLK under the iCloud vault path. Exercise the real request
+// path at boot so the failure surfaces at startup, not on Kelvin's first send.
+app.post('/__selftest', (req, res) => res.json({ pong: req.body?.ping === 'ping' }));
+
+async function selfTest() {
+    try {
+        const r = await fetch(`http://127.0.0.1:${PORT}/__selftest`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ping: 'ping' }),
+        });
+        const body = await r.json();
+        if (!r.ok || body.pong !== true) throw new Error(`unexpected reply: ${JSON.stringify(body)}`);
+        bodyParserOk = true;
+        console.log('[selftest] request path OK (body parser warm)');
+    } catch (err) {
+        bodyParserOk = false;
+        selfTestError = err.message;
+        console.error(`[selftest] FAILED — POST path is broken, /send will not work: ${err.message}`);
+        console.error('[selftest] if this is an EDEADLK/errno -11, the server is running from the iCloud path; it must run from ~/.kelvers');
+    }
+}
+
 // ── Start ─────────────────────────────────────────────────────────
-app.listen(PORT, '127.0.0.1', () => {
+app.listen(PORT, '127.0.0.1', async () => {
     console.log(`[omni-bridge] listening on 127.0.0.1:${PORT}`);
+    await selfTest();
     connect();
 });
