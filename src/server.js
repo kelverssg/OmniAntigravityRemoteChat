@@ -141,7 +141,7 @@ function extractQuery(message) {
 
 function runRecall(query) {
     return new Promise((resolve) => {
-        execFile('python3', [RECALL_SCRIPT, query, '--limit', '2', '--threshold', '0.50'], { timeout: 6000 }, (error, stdout, stderr) => {
+        execFile('python3', [RECALL_SCRIPT, query, '--limit', '2', '--threshold', '0.45'], { timeout: 6000 }, (error, stdout, stderr) => {
             if (error) {
                 console.error('[recall] error or timeout running recall script:', error.message);
                 resolve(null); // Return null to indicate error/timeout explicitly
